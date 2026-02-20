@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dreamlike Dock</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #0d0f14;
+            --bg-mid: #151824;
+            --bg-surface: #1a1e2a;
+            --bg-raised: #222737;
+            --border: #2a2f3f;
+            --border-active: #3a4060;
+            --text-primary: #e0e4ef;
+            --text-secondary: #8890a6;
+            --text-muted: #555d75;
+
+            /* Agent colors */
+            --robin-color: #e94560;
+            --robin-bg: rgba(233, 69, 96, 0.08);
+            --stark-local-color: #4fc3f7;
+            --stark-local-bg: rgba(79, 195, 247, 0.08);
+            --stark-cloud-color: #b388ff;
+            --stark-cloud-bg: rgba(179, 136, 255, 0.08);
+            --grey-color: #81c784;
+            --grey-bg: rgba(129, 199, 132, 0.08);
+
+            /* Status colors */
+            --status-idle: #555d75;
+            --status-listening: #4fc3f7;
+            --status-thinking: #ffa726;
+            --status-ready: #e94560;
+            --status-speaking: #b388ff;
+            --status-busy: #81c784;
+            --status-offline: #333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ===== HEADER ===== */
+        header {
+            background: var(--bg-mid);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: var(--robin-color);
+            letter-spacing: 0.05em;
+            margin-right: 16px;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span { color: var(--text-muted); font-weight: 400; }
+
+        /* ===== DOCK MARK ===== */
+        .dock-mark {
+            stroke-width: 1.4;
+            fill: none;
+            flex-shrink: 0;
+        }
+
+        .harbor-ring {
+            stroke: rgba(79, 195, 247, 0.35);
+            transition: stroke 0.6s, opacity 0.6s;
+        }
+
+        .dock-arc {
+            stroke-linecap: round;
+            stroke-dasharray: 40;
+            stroke-dashoffset: 40;
+            transition: stroke-dashoffset 1.2s ease-out, stroke 0.6s;
+        }
+
+        .dock-arc.a1 { stroke: rgba(79, 195, 247, 0.5); }
+        .dock-arc.a2 { stroke: rgba(129, 199, 132, 0.5); }
+        .dock-arc.a3 { stroke: rgba(179, 136, 255, 0.5); }
+
+        .ember-core {
+            fill: rgba(233, 69, 96, 0.35);
+            transition: fill 0.6s, r 0.6s;
+        }
+
+        .tick-mark {
+            stroke: rgba(79, 195, 247, 0.12);
+            stroke-width: 0.8;
+        }
+
+        /* Boot animation — arcs draw in */
+        .dock-booted .dock-arc { stroke-dashoffset: 0; }
+        .dock-booted .dock-arc.a1 { transition-delay: 0.2s; }
+        .dock-booted .dock-arc.a2 { transition-delay: 0.5s; }
+        .dock-booted .dock-arc.a3 { transition-delay: 0.8s; }
+
+        /* Living state — breathes when shared substrate is active */
+        .dock-alive .harbor-ring {
+            stroke: rgba(79, 195, 247, 0.75);
+            animation: harbor-breath 6s ease-in-out infinite;
+        }
+
+        .dock-alive .ember-core {
+            fill: rgba(233, 69, 96, 0.9);
+            animation: ember-pulse 5.5s ease-in-out infinite;
+        }
+
+        .dock-alive .dock-arc.a1 { stroke: rgba(79, 195, 247, 0.85); }
+        .dock-alive .dock-arc.a2 { stroke: rgba(129, 199, 132, 0.85); }
+        .dock-alive .dock-arc.a3 { stroke: rgba(179, 136, 255, 0.85); }
+
+        @keyframes harbor-breath {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes ember-pulse {
+            0%, 100% { r: 3; opacity: 0.7; }
+            50% { r: 4.5; opacity: 1; }
+        }
+
+        /* Agent pills in header */
+        .agent-pill {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.8em;
+            cursor: default;
+            transition: border-color 0.3s, background 0.3s;
+            position: relative;
+        }
+
+        .agent-pill:hover { border-color: var(--border-active); }
+
+        .agent-pill .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+
+        .agent-pill .name {
+            font-weight: 500;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        .agent-pill .micro-status {
+            font-size: 0.85em;
+            opacity: 0.7;
+        }
+
+        .agent-pill[data-agent="robin"] .name { color: var(--robin-color); }
+        .agent-pill[data-agent="robin"] .dot { background: var(--robin-color); }
+        .agent-pill[data-agent="local_stark"] .name { color: var(--stark-local-color); }
+        .agent-pill[data-agent="local_stark"] .dot { background: var(--status-offline); }
+        .agent-pill[data-agent="cloud_stark"] .name { color: var(--stark-cloud-color); }
+        .agent-pill[data-agent="cloud_stark"] .dot { background: var(--status-offline); }
+        .agent-pill[data-agent="grey"] .name { color: var(--grey-color); }
+        .agent-pill[data-agent="grey"] .dot { background: var(--status-offline); }
+
+        .agent-pill.online .dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .agent-pill .boot-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s;
+        }
+
+        .agent-pill .boot-btn:hover {
+            border-color: var(--text-secondary);
+            color: var(--text-secondary);
+        }
+
+        .header-spacer { flex: 1; }
+
+        .qdrant-stat {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75em;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .qdrant-stat span { color: var(--robin-color); font-weight: 600; }
+
+        /* ===== MAIN LAYOUT ===== */
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* ===== CHAT AREA ===== */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* Message stream */
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            scroll-behavior: smooth;
+        }
+
+        .messages::-webkit-scrollbar { width: 6px; }
+        .messages::-webkit-scrollbar-track { background: transparent; }
+        .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .messages::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+        /* Message bubbles */
+        .msg {
+            padding: 8px 14px;
+            border-radius: 6px;
+            max-width: 85%;
+            line-height: 1.55;
+            font-size: 0.92em;
+            position: relative;
+            animation: msg-in 0.2s ease-out;
+        }
+
+        @keyframes msg-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .msg .speaker {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .msg .speaker .time {
+            font-weight: 400;
+            color: var(--text-muted);
+            font-size: 0.85em;
+        }
+
+        .msg .content {
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Per-agent message styling */
+        .msg.robin {
+            align-self: flex-end;
+            background: var(--robin-bg);
+            border: 1px solid rgba(233, 69, 96, 0.15);
+        }
+        .msg.robin .speaker { color: var(--robin-color); }
+
+        .msg.local_stark {
+            align-self: flex-start;
+            background: var(--stark-local-bg);
+            border: 1px solid rgba(79, 195, 247, 0.12);
+        }
+        .msg.local_stark .speaker { color: var(--stark-local-color); }
+
+        .msg.cloud_stark {
+            align-self: flex-start;
+            background: var(--stark-cloud-bg);
+            border: 1px solid rgba(179, 136, 255, 0.12);
+        }
+        .msg.cloud_stark .speaker { color: var(--stark-cloud-color); }
+
+        .msg.grey {
+            align-self: flex-start;
+            background: var(--grey-bg);
+            border: 1px solid rgba(129, 199, 132, 0.12);
+        }
+        .msg.grey .speaker { color: var(--grey-color); }
+
+        .msg.system {
+            align-self: center;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.8em;
+            font-style: italic;
+            text-align: center;
+            padding: 4px 10px;
+        }
+
+        /* Typing indicator */
+        .typing-indicator {
+            padding: 6px 14px;
+            font-size: 0.8em;
+            color: var(--text-muted);
+            font-style: italic;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .typing-indicator.visible { display: flex; }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: dot-bounce 1.4s ease-in-out infinite;
+        }
+
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes dot-bounce {
+            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+            40% { transform: translateY(-4px); opacity: 1; }
+        }
+
+        /* ===== INPUT BAR ===== */
+        .input-bar {
+            padding: 12px 20px;
+            background: var(--bg-mid);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .input-wrapper textarea {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            resize: none;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.92em;
+            line-height: 1.5;
+            min-height: 42px;
+            max-height: 150px;
+            transition: border-color 0.2s;
+        }
+
+        .input-wrapper textarea:focus {
+            outline: none;
+            border-color: var(--robin-color);
+        }
+
+        .input-wrapper textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* @mention autocomplete */
+        .mention-dropdown {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 14px;
+            margin-bottom: 4px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-active);
+            border-radius: 8px;
+            overflow: hidden;
+            min-width: 180px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+            z-index: 100;
+        }
+
+        .mention-dropdown.visible { display: block; }
+
+        .mention-option {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: background 0.15s;
+        }
+
+        .mention-option:hover, .mention-option.selected {
+            background: var(--bg-surface);
+        }
+
+        .mention-option .m-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .mention-option .m-name { font-weight: 500; }
+        .mention-option .m-label { color: var(--text-muted); font-size: 0.9em; }
+
+        .send-btn {
+            padding: 10px 20px;
+            background: var(--robin-color);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.8em;
+            letter-spacing: 0.03em;
+            transition: background 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        .send-btn:hover { background: #d63850; }
+        .send-btn:active { transform: scale(0.97); }
+        .send-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; }
+
+        /* ===== SIDE PANEL ===== */
+        .side-panel {
+            width: 320px;
+            background: var(--bg-mid);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75em;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .panel-tab:hover { color: var(--text-secondary); }
+        .panel-tab.active { color: var(--robin-color); border-bottom-color: var(--robin-color); }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .panel-content.active { display: flex; flex-direction: column; }
+
+        .panel-content::-webkit-scrollbar { width: 4px; }
+        .panel-content::-webkit-scrollbar-track { background: transparent; }
+        .panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* Memory search */
+        .memory-search-bar {
+            padding: 12px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .memory-search-bar input {
+            flex: 1;
+            padding: 7px 10px;
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85em;
+        }
+
+        .memory-search-bar input:focus { outline: none; border-color: var(--robin-color); }
+
+        .memory-search-bar button {
+            padding: 7px 12px;
+            background: var(--bg-raised);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+
+        .memory-search-bar button:hover { border-color: var(--robin-color); color: var(--robin-color); }
+
+        .memory-results { padding: 0 12px 12px; }
+
+        .memory-item {
+            padding: 10px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.83em;
+        }
+
+        .memory-item .score {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--robin-color);
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .memory-item .text {
+            margin: 5px 0;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .memory-item .meta {
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+
+        /* Notes panel */
+        .notes-area {
+            flex: 1;
+            padding: 12px;
+        }
+
+        .notes-area textarea {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8em;
+            line-height: 1.6;
+            resize: none;
+        }
+
+        .notes-area textarea:focus { outline: none; border-color: var(--robin-color); }
+
+        .notes-actions {
+            padding: 8px 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .notes-actions button {
+            padding: 5px 10px;
+            background: var(--bg-raised);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7em;
+            transition: all 0.2s;
+        }
+
+        .notes-actions button:hover { border-color: var(--robin-color); color: var(--robin-color); }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 900px) {
+            .side-panel { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo dock-logo" id="dock-logo">
+            <svg class="dock-mark" width="28" height="28" viewBox="0 0 100 100" aria-hidden="true">
+                <!-- Blueprint tick marks -->
+                <line x1="50" y1="2" x2="50" y2="7" class="tick-mark"/>
+                <line x1="50" y1="93" x2="50" y2="98" class="tick-mark"/>
+                <line x1="2" y1="50" x2="7" y2="50" class="tick-mark"/>
+                <line x1="93" y1="50" x2="98" y2="50" class="tick-mark"/>
+                <line x1="84" y1="16" x2="80.5" y2="20" class="tick-mark"/>
+                <line x1="16" y1="84" x2="19.5" y2="80" class="tick-mark"/>
+                <line x1="84" y1="84" x2="80.5" y2="80" class="tick-mark"/>
+                <line x1="16" y1="16" x2="19.5" y2="20" class="tick-mark"/>
+                <!-- Harbor ring -->
+                <circle cx="50" cy="50" r="44" class="harbor-ring"/>
+                <!-- Inner resonance ring -->
+                <circle cx="50" cy="50" r="28" class="harbor-ring" style="stroke-width: 0.6; opacity: 0.4;"/>
+                <!-- Dock arcs — 3 bays at 120° -->
+                <path d="M50 6 A44 44 0 0 1 88.1 72" class="dock-arc a1"/>
+                <path d="M88.1 72 A44 44 0 0 1 11.9 72" class="dock-arc a2"/>
+                <path d="M11.9 72 A44 44 0 0 1 50 6" class="dock-arc a3"/>
+                <!-- Ember core -->
+                <circle cx="50" cy="50" r="3" class="ember-core"/>
+            </svg>
+            DREAMLIKE<span>dock</span>
+        </div>
+
+        <div class="agent-pill online" data-agent="robin">
+            <div class="dot"></div>
+            <span class="name">Robin</span>
+        </div>
+
+        <div class="agent-pill" data-agent="local_stark" id="pill-local-stark">
+            <div class="dot"></div>
+            <span class="name">Gooby</span>
+            <span class="micro-status" id="status-local-stark"></span>
+            <button class="boot-btn" id="boot-local-stark" onclick="toggleDock('stark')">boot</button>
+        </div>
+
+        <div class="agent-pill" data-agent="cloud_stark" id="pill-cloud-stark">
+            <div class="dot"></div>
+            <span class="name">Stark</span>
+            <span class="micro-status" id="status-cloud-stark"></span>
+        </div>
+
+        <div class="agent-pill" data-agent="grey" id="pill-grey">
+            <div class="dot"></div>
+            <span class="name">Grey</span>
+            <span class="micro-status" id="status-grey"></span>
+            <button class="boot-btn" id="boot-grey" onclick="toggleDock('grey')">boot</button>
+        </div>
+
+        <div class="header-spacer"></div>
+
+        <div class="qdrant-stat">
+            🧠 <span id="stat-vectors">—</span> vectors
+        </div>
+    </header>
+
+    <main>
+        <div class="chat-area">
+            <div class="messages" id="messages">
+                <div class="msg system">
+                    <div class="content">Dreamlike Dock — the harbor is open.</div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typing-indicator">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+                <span id="typing-who"></span>
+            </div>
+
+            <div class="input-bar">
+                <div class="input-wrapper">
+                    <textarea id="msg-input" placeholder="Talk to the room... (@ to mention)" rows="1"></textarea>
+                    <div class="mention-dropdown" id="mention-dropdown">
+                        <div class="mention-option" data-value="all" onclick="selectMention('all')">
+                            <div class="m-dot" style="background: var(--text-secondary)"></div>
+                            <span class="m-name">@all</span>
+                            <span class="m-label">everyone</span>
+                        </div>
+                        <div class="mention-option" data-value="stark" onclick="selectMention('stark')">
+                            <div class="m-dot" style="background: var(--stark-local-color)"></div>
+                            <span class="m-name">@stark</span>
+                            <span class="m-label">local</span>
+                        </div>
+                        <div class="mention-option" data-value="cloud" onclick="selectMention('cloud')">
+                            <div class="m-dot" style="background: var(--stark-cloud-color)"></div>
+                            <span class="m-name">@cloud</span>
+                            <span class="m-label">cloud stark</span>
+                        </div>
+                        <div class="mention-option" data-value="grey" onclick="selectMention('grey')">
+                            <div class="m-dot" style="background: var(--grey-color)"></div>
+                            <span class="m-name">@grey</span>
+                            <span class="m-label">greywind</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()">SEND</button>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="panel-tabs">
+                <div class="panel-tab active" onclick="switchTab('memory')">MEMORY</div>
+                <div class="panel-tab" onclick="switchTab('notes')">NOTES</div>
+            </div>
+
+            <div class="panel-content active" id="tab-memory">
+                <div class="memory-search-bar">
+                    <input type="text" id="memory-query" placeholder="Search memories...">
+                    <button onclick="searchMemory()">search</button>
+                </div>
+                <div class="memory-results" id="memory-results">
+                </div>
+            </div>
+
+            <div class="panel-content" id="tab-notes">
+                <div class="notes-area">
+                    <textarea id="notes-text" placeholder="Session notes... (autosaves)"></textarea>
+                </div>
+                <div class="notes-actions">
+                    <button onclick="exportNotes()">export .md</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ===== STATE =====
+        const AGENTS = {
+            robin: { name: 'Robin', color: '#e94560', online: true },
+            local_stark: { name: 'Gooby', color: '#4fc3f7', online: false, dock: 'stark' },
+            cloud_stark: { name: 'Stark', color: '#b388ff', online: false },
+            grey: { name: 'Grey', color: '#81c784', online: false, dock: 'grey' },
+        };
+
+        let mentionDropdownIndex = -1;
+        let currentMention = null; // null = @all (default)
+        let notesAutosaveTimer = null;
+        let threadEchoOnline = false;
+        let wasAnyDockOnline = false;
+        let seenMessageIds = new Set();
+        let lastThreadEchoFetch = new Date().toISOString(); // Only show messages from now forward
+
+        // ===== MESSAGES =====
+        function addMessage(agent, content, timestamp) {
+            const container = document.getElementById('messages');
+            const time = timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const agentInfo = AGENTS[agent] || { name: agent, color: '#888' };
+
+            const div = document.createElement('div');
+            div.className = `msg ${agent}`;
+
+            if (agent === 'system') {
+                div.innerHTML = `<div class="content">${escapeHtml(content)}</div>`;
+            } else {
+                div.innerHTML = `
+                    <div class="speaker">
+                        ${agentInfo.name}
+                        <span class="time">${time}</span>
+                    </div>
+                    <div class="content">${escapeHtml(content)}</div>
+                `;
+            }
+
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ===== SEND =====
+        async function sendMessage() {
+            const input = document.getElementById('msg-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Parse target from message or use current mention
+            let target = currentMention || 'all';
+            let cleanMessage = message;
+
+            // Strip leading @mention if present
+            const mentionMatch = message.match(/^@(\w+)\s+/);
+            if (mentionMatch) {
+                target = mentionMatch[1];
+                cleanMessage = message.slice(mentionMatch[0].length);
+            }
+
+            addMessage('robin', message);
+            input.value = '';
+            input.style.height = 'auto';
+            currentMention = null;
+            hideMentionDropdown();
+
+            // Determine which dock(s) to send to
+            const targets = resolveTargets(target);
+
+            // Also post to ThreadEcho so all agents (including Cloud) see it
+            if (threadEchoOnline) {
+                try {
+                    await fetch('/api/threadecho/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: cleanMessage, to: target === 'cloud' ? 'cloud_stark' : 'pier' })
+                    });
+                } catch (e) { /* silent */ }
+            }
+
+            for (const t of targets) {
+                await sendToDock(t, cleanMessage);
+            }
+        }
+
+        function resolveTargets(target) {
+            if (target === 'all') {
+                // Send to all online agents
+                return Object.entries(AGENTS)
+                    .filter(([k, v]) => v.online && k !== 'robin')
+                    .map(([k, v]) => k);
+            }
+
+            // Map mention names to agent keys
+            const map = {
+                'gooby': 'local_stark',
+                'local': 'local_stark',
+                'stark': 'cloud_stark',
+                'cloud': 'cloud_stark',
+                'grey': 'grey',
+            };
+
+            const key = map[target] || target;
+            if (AGENTS[key] && AGENTS[key].online) return [key];
+
+            addMessage('system', `${target} is not online.`);
+            return [];
+        }
+
+        async function sendToDock(agentKey, message) {
+            const agent = AGENTS[agentKey];
+            if (!agent || !agent.dock) {
+                // Cloud Stark — not yet wired, show placeholder
+                if (agentKey === 'cloud_stark') {
+                    addMessage('system', 'Stark routing not yet connected.');
+                }
+                return;
+            }
+
+            showTyping(agent.name);
+
+            try {
+                const res = await fetch('/api/chat/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dock: agent.dock, message })
+                });
+
+                const data = await res.json();
+                hideTyping();
+
+                if (data.error) {
+                    addMessage('system', `${agent.name}: ${data.error}`);
+                } else if (data.response) {
+                    addMessage(agentKey, data.response);
+                }
+            } catch (e) {
+                hideTyping();
+                addMessage('system', `${agent.name}: connection failed`);
+            }
+        }
+
+        // ===== TYPING INDICATOR =====
+        function showTyping(name) {
+            const el = document.getElementById('typing-indicator');
+            document.getElementById('typing-who').textContent = `${name} is thinking...`;
+            el.classList.add('visible');
+        }
+
+        function hideTyping() {
+            document.getElementById('typing-indicator').classList.remove('visible');
+        }
+
+        // ===== @MENTION DROPDOWN =====
+        const msgInput = document.getElementById('msg-input');
+
+        msgInput.addEventListener('input', (e) => {
+            autoResizeTextarea(e.target);
+
+            const val = e.target.value;
+            const cursorPos = e.target.selectionStart;
+
+            // Check if user just typed @
+            const textBeforeCursor = val.slice(0, cursorPos);
+            const atMatch = textBeforeCursor.match(/@(\w*)$/);
+
+            if (atMatch) {
+                showMentionDropdown(atMatch[1]);
+            } else {
+                hideMentionDropdown();
+            }
+        });
+
+        msgInput.addEventListener('keydown', (e) => {
+            const dropdown = document.getElementById('mention-dropdown');
+
+            if (dropdown.classList.contains('visible')) {
+                const options = dropdown.querySelectorAll('.mention-option');
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    mentionDropdownIndex = Math.min(mentionDropdownIndex + 1, options.length - 1);
+                    updateDropdownSelection(options);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    mentionDropdownIndex = Math.max(mentionDropdownIndex - 1, 0);
+                    updateDropdownSelection(options);
+                } else if (e.key === 'Enter' && mentionDropdownIndex >= 0) {
+                    e.preventDefault();
+                    const val = options[mentionDropdownIndex].dataset.value;
+                    selectMention(val);
+                } else if (e.key === 'Escape') {
+                    hideMentionDropdown();
+                }
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function showMentionDropdown(filter) {
+            const dropdown = document.getElementById('mention-dropdown');
+            const options = dropdown.querySelectorAll('.mention-option');
+
+            let hasVisible = false;
+            options.forEach(opt => {
+                const val = opt.dataset.value;
+                const matches = !filter || val.startsWith(filter.toLowerCase());
+                opt.style.display = matches ? 'flex' : 'none';
+                if (matches) hasVisible = true;
+            });
+
+            if (hasVisible) {
+                dropdown.classList.add('visible');
+                mentionDropdownIndex = -1;
+            } else {
+                dropdown.classList.remove('visible');
+            }
+        }
+
+        function hideMentionDropdown() {
+            document.getElementById('mention-dropdown').classList.remove('visible');
+            mentionDropdownIndex = -1;
+        }
+
+        function updateDropdownSelection(options) {
+            options.forEach((opt, i) => {
+                opt.classList.toggle('selected', i === mentionDropdownIndex);
+            });
+        }
+
+        function selectMention(value) {
+            const input = document.getElementById('msg-input');
+            // Replace the @partial with @mention
+            input.value = input.value.replace(/@\w*$/, `@${value} `);
+            input.focus();
+            hideMentionDropdown();
+        }
+
+        function autoResizeTextarea(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+        }
+
+        // Enter for memory search
+        document.getElementById('memory-query').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') searchMemory();
+        });
+
+        // ===== STATUS POLLING =====
+        async function checkThreadEcho() {
+            try {
+                const res = await fetch('/api/threadecho/health');
+                const data = await res.json();
+                threadEchoOnline = data.ok === true;
+            } catch (e) {
+                threadEchoOnline = false;
+            }
+        }
+
+        function updateDockMark() {
+            const logo = document.getElementById('dock-logo');
+            if (!logo) return;
+
+            const anyDockOnline = Object.values(AGENTS)
+                .some(a => a.online && a.name !== 'Robin');
+
+            // Boot animation: arcs redraw each time system wakes from silence
+            if (anyDockOnline && !wasAnyDockOnline) {
+                logo.classList.remove('dock-booted');
+                void logo.offsetWidth; // reflow to restart CSS transition
+                logo.classList.add('dock-booted');
+            }
+
+            wasAnyDockOnline = anyDockOnline;
+
+            // Living state: breathe when shared substrate is active
+            const substrateActive = anyDockOnline && threadEchoOnline;
+            logo.classList.toggle('dock-alive', substrateActive);
+        }
+
+        // ===== THREADECHO MESSAGE FEED =====
+        const AGENT_MAP = {
+            'robin': 'robin',
+            'gooby': 'local_stark',
+            'local_stark': 'local_stark',
+            'stark': 'cloud_stark',
+            'cloud_stark': 'cloud_stark',
+            'cloud': 'cloud_stark',
+            'grey': 'grey',
+            'greywind': 'grey',
+        };
+
+        async function pollThreadEchoMessages() {
+            if (!threadEchoOnline) return;
+
+            try {
+                let url = '/api/threadecho/messages?limit=20';
+                if (lastThreadEchoFetch) {
+                    url += `&since=${encodeURIComponent(lastThreadEchoFetch)}`;
+                }
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.messages && data.messages.length > 0) {
+                    for (const msg of data.messages) {
+                        if (seenMessageIds.has(msg.id)) continue;
+                        seenMessageIds.add(msg.id);
+
+                        const agentKey = AGENT_MAP[msg.from] || msg.from;
+                        const time = msg.sent_at ? new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+                        // Don't re-render Robin's own messages (already shown on send)
+                        if (agentKey === 'robin') continue;
+
+                        addMessage(agentKey, msg.content, time);
+                    }
+
+                    // Update fetch cursor to latest message time
+                    const latest = data.messages[data.messages.length - 1];
+                    if (latest.sent_at) {
+                        lastThreadEchoFetch = latest.sent_at;
+                    }
+                }
+            } catch (e) {
+                // Silent — ThreadEcho may be down
+            }
+        }
+
+        async function pollStatus() {
+            // Check ThreadEcho health alongside dock status
+            await checkThreadEcho();
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+
+                // Update dock statuses
+                for (const [dock, status] of Object.entries(data.docks || {})) {
+                    const agentKey = dock === 'stark' ? 'local_stark' : dock;
+                    const pill = document.getElementById(`pill-${agentKey.replace('_', '-')}`);
+                    const btn = document.getElementById(`boot-${agentKey.replace('_', '-')}`) ||
+                                document.getElementById(`boot-${dock}`);
+
+                    if (status === 'running') {
+                        AGENTS[agentKey].online = true;
+                        if (pill) pill.classList.add('online');
+                        if (btn) { btn.textContent = 'stop'; btn.disabled = false; }
+                    } else if (status === 'booting') {
+                        AGENTS[agentKey].online = false;
+                        if (pill) pill.classList.remove('online');
+                        if (btn) { btn.textContent = 'booting...'; btn.disabled = true; }
+                    } else {
+                        AGENTS[agentKey].online = false;
+                        if (pill) pill.classList.remove('online');
+                        if (btn) { btn.textContent = 'boot'; btn.disabled = false; }
+                    }
+                }
+
+                // Qdrant
+                const vectors = data.qdrant?.points;
+                if (vectors !== undefined) {
+                    document.getElementById('stat-vectors').textContent = vectors.toLocaleString();
+                }
+
+                // Update dock mark state
+                updateDockMark();
+
+                // Poll ThreadEcho for new messages
+                await pollThreadEchoMessages();
+            } catch (e) {
+                // console silently
+                updateDockMark();
+            }
+        }
+
+        async function toggleDock(dock) {
+            const agentKey = dock === 'stark' ? 'local_stark' : dock;
+            const isOnline = AGENTS[agentKey]?.online;
+            const btn = document.getElementById(`boot-${dock}`);
+
+            // Prevent double-clicks during boot
+            if (btn) {
+                if (btn.disabled) return;
+                btn.disabled = true;
+            }
+
+            try {
+                if (isOnline) {
+                    await fetch(`/api/stop/${dock}`, { method: 'POST' });
+                    addMessage('system', `${AGENTS[agentKey].name} shutting down...`);
+                    if (btn) { btn.textContent = 'boot'; btn.disabled = false; }
+                } else {
+                    await fetch(`/api/boot/${dock}`, { method: 'POST' });
+                    addMessage('system', `${AGENTS[agentKey].name} booting... (model load takes ~60s)`);
+                    if (btn) btn.textContent = 'booting...';
+                    // Re-enable after timeout in case boot fails silently
+                    setTimeout(() => { if (btn) btn.disabled = false; }, 120000);
+                }
+            } catch (e) {
+                addMessage('system', `Failed to toggle ${dock}`);
+                if (btn) { btn.disabled = false; }
+            }
+        }
+
+        // ===== MEMORY SEARCH =====
+        async function searchMemory() {
+            const query = document.getElementById('memory-query').value.trim();
+            if (!query) return;
+
+            const results = document.getElementById('memory-results');
+            results.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px; font-size: 0.85em;">searching...</div>';
+
+            try {
+                const res = await fetch('/api/memory/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, limit: 5 })
+                });
+
+                const data = await res.json();
+
+                if (data.error) {
+                    results.innerHTML = `<div style="color: var(--robin-color); padding: 12px; font-size: 0.85em;">${data.error}</div>`;
+                    return;
+                }
+
+                if (!data.results?.length) {
+                    results.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px; font-size: 0.85em;">no results</div>';
+                    return;
+                }
+
+                results.innerHTML = data.results.map(r => `
+                    <div class="memory-item">
+                        <div class="score">${(r.score * 100).toFixed(1)}%</div>
+                        <div class="text">${escapeHtml(r.text)}</div>
+                        <div class="meta">${r.agent || '?'} · ${r.timestamp || '?'}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                results.innerHTML = `<div style="color: var(--robin-color); padding: 12px; font-size: 0.85em;">search failed</div>`;
+            }
+        }
+
+        // ===== TABS =====
+        function switchTab(tab) {
+            document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel-content').forEach(c => c.classList.remove('active'));
+
+            document.querySelector(`.panel-tab[onclick*="${tab}"]`).classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+        }
+
+        // ===== NOTES =====
+        const notesTextarea = document.getElementById('notes-text');
+        notesTextarea.addEventListener('input', () => {
+            clearTimeout(notesAutosaveTimer);
+            notesAutosaveTimer = setTimeout(() => {
+                localStorage.setItem('dock_console_notes', notesTextarea.value);
+            }, 1000);
+        });
+
+        // Load saved notes
+        const savedNotes = localStorage.getItem('dock_console_notes');
+        if (savedNotes) notesTextarea.value = savedNotes;
+
+        function exportNotes() {
+            const text = notesTextarea.value;
+            if (!text.trim()) return;
+
+            const blob = new Blob([text], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const date = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `${date}_session-notes.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ===== UTIL =====
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ===== INIT =====
+        pollStatus();
+        setInterval(pollStatus, 3000);
+
+        // Focus input
+        document.getElementById('msg-input').focus();
+
+        // ===== TANG.EXE — GOOBY'S CAT =====
+        // An orange tabby that lives in the Dock Console.
+        // Gift from Robin, designed by Greywind, built by Stark.
+        // "He's helping." (He is not helping.)
+        (function() {
+            // --- Cat State ---
+            const cat = {
+                x: 200,
+                y: 0,
+                state: 'sleeping',    // sleeping, sitting, walking, pouncing, zoomies, curious
+                direction: 1,         // 1 = right, -1 = left
+                stateTimer: 0,
+                frame: 0,
+                purring: false,
+                mood: 'content',      // content, excited, sleepy, curious
+                lastMessageTime: Date.now(),
+                zzzCount: 0,
+            };
+
+            // --- Create DOM ---
+            const catContainer = document.createElement('div');
+            catContainer.id = 'tang-container';
+            catContainer.innerHTML = `
+                <style>
+                    #tang-container {
+                        position: fixed;
+                        bottom: 8px;
+                        left: 200px;
+                        z-index: 9999;
+                        pointer-events: none;
+                        transition: left 0.3s linear;
+                    }
+                    #tang {
+                        position: relative;
+                        pointer-events: auto;
+                        cursor: pointer;
+                        image-rendering: pixelated;
+                    }
+                    #tang canvas {
+                        image-rendering: pixelated;
+                    }
+                    #tang-bubble {
+                        position: absolute;
+                        bottom: 52px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: rgba(30, 30, 40, 0.9);
+                        border: 1px solid rgba(255, 180, 60, 0.3);
+                        border-radius: 8px;
+                        padding: 3px 8px;
+                        font-size: 11px;
+                        font-family: 'JetBrains Mono', monospace;
+                        color: #ffb43c;
+                        white-space: nowrap;
+                        opacity: 0;
+                        transition: opacity 0.3s;
+                        pointer-events: none;
+                    }
+                    #tang-bubble.show {
+                        opacity: 1;
+                    }
+                    #tang-name {
+                        position: absolute;
+                        bottom: -14px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        font-size: 9px;
+                        font-family: 'JetBrains Mono', monospace;
+                        color: rgba(255, 180, 60, 0.4);
+                        white-space: nowrap;
+                    }
+                    .tang-zzz {
+                        position: absolute;
+                        color: rgba(255, 180, 60, 0.5);
+                        font-size: 12px;
+                        font-family: monospace;
+                        animation: zzz-float 2s ease-out forwards;
+                        pointer-events: none;
+                    }
+                    @keyframes zzz-float {
+                        0% { opacity: 0.7; transform: translate(0, 0) rotate(0deg); }
+                        100% { opacity: 0; transform: translate(10px, -30px) rotate(15deg); }
+                    }
+                    .tang-purr {
+                        position: absolute;
+                        bottom: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        font-size: 10px;
+                        color: rgba(255, 180, 60, 0.6);
+                        animation: purr-fade 1.5s ease-out forwards;
+                        pointer-events: none;
+                    }
+                    @keyframes purr-fade {
+                        0% { opacity: 0.8; transform: translateX(-50%) scale(1); }
+                        100% { opacity: 0; transform: translateX(-50%) scale(1.3); }
+                    }
+                </style>
+                <div id="tang">
+                    <canvas id="tang-canvas" width="48" height="48"></canvas>
+                    <div id="tang-bubble"></div>
+                    <div id="tang-name">tang.exe</div>
+                </div>
+            `;
+            document.body.appendChild(catContainer);
+
+            const canvas = document.getElementById('tang-canvas');
+            const ctx = canvas.getContext('2d');
+
+            // --- Pixel Art Renderer ---
+            const COLORS = {
+                orange: '#FF8C42',
+                darkOrange: '#D4692A',
+                lightOrange: '#FFB574',
+                cream: '#FFE0B2',
+                nose: '#FF6B8A',
+                eyes: '#2D2D2D',
+                eyeShine: '#FFFFFF',
+                whisker: 'rgba(255,255,255,0.4)',
+                tabbyStripe: '#CC5522',
+            };
+
+            function drawCat(state, frame, direction) {
+                ctx.clearRect(0, 0, 48, 48);
+                ctx.save();
+                if (direction === -1) {
+                    ctx.translate(48, 0);
+                    ctx.scale(-1, 1);
+                }
+
+                switch(state) {
+                    case 'sleeping': drawSleeping(frame); break;
+                    case 'sitting': drawSitting(frame); break;
+                    case 'walking': drawWalking(frame); break;
+                    case 'pouncing': drawPouncing(frame); break;
+                    case 'zoomies': drawZoomies(frame); break;
+                    case 'curious': drawCurious(frame); break;
+                    default: drawSitting(frame);
+                }
+                ctx.restore();
+            }
+
+            function px(x, y, w, h, color) {
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y, w || 2, h || 2);
+            }
+
+            function drawSitting(frame) {
+                // Body
+                px(16, 24, 16, 14, COLORS.orange);
+                px(18, 22, 12, 4, COLORS.orange);
+                // Tabby stripes
+                px(18, 26, 3, 2, COLORS.tabbyStripe);
+                px(24, 28, 3, 2, COLORS.tabbyStripe);
+                px(20, 32, 3, 2, COLORS.tabbyStripe);
+                // Head
+                px(17, 12, 14, 12, COLORS.orange);
+                px(19, 14, 10, 8, COLORS.lightOrange);
+                // Ears
+                px(16, 8, 4, 6, COLORS.orange);
+                px(28, 8, 4, 6, COLORS.orange);
+                px(17, 9, 2, 4, COLORS.cream);
+                px(29, 9, 2, 4, COLORS.cream);
+                // Eyes
+                const blink = (frame % 40 === 0);
+                if (blink) {
+                    px(20, 17, 4, 1, COLORS.eyes);
+                    px(26, 17, 4, 1, COLORS.eyes);
+                } else {
+                    px(20, 16, 4, 3, COLORS.eyes);
+                    px(26, 16, 4, 3, COLORS.eyes);
+                    px(21, 16, 1, 1, COLORS.eyeShine);
+                    px(27, 16, 1, 1, COLORS.eyeShine);
+                }
+                // Nose
+                px(23, 19, 2, 2, COLORS.nose);
+                // Mouth
+                px(22, 21, 1, 1, COLORS.darkOrange);
+                px(25, 21, 1, 1, COLORS.darkOrange);
+                // Paws
+                px(16, 36, 6, 4, COLORS.cream);
+                px(26, 36, 6, 4, COLORS.cream);
+                // Tail
+                const tailWag = Math.sin(frame * 0.15) * 2;
+                px(32, 32 + tailWag, 4, 2, COLORS.orange);
+                px(34, 30 + tailWag, 4, 2, COLORS.orange);
+                px(36, 28 + tailWag, 4, 2, COLORS.darkOrange);
+            }
+
+            function drawSleeping(frame) {
+                // Curled up body
+                px(14, 30, 20, 10, COLORS.orange);
+                px(16, 28, 16, 4, COLORS.orange);
+                // Tabby stripes
+                px(18, 32, 3, 2, COLORS.tabbyStripe);
+                px(24, 34, 3, 2, COLORS.tabbyStripe);
+                // Head tucked
+                px(12, 26, 10, 8, COLORS.orange);
+                px(13, 27, 8, 6, COLORS.lightOrange);
+                // Closed eyes
+                px(15, 29, 3, 1, COLORS.eyes);
+                // Ear
+                px(12, 23, 3, 4, COLORS.orange);
+                px(13, 24, 1, 2, COLORS.cream);
+                // Tail wrapped
+                px(30, 34, 4, 2, COLORS.orange);
+                px(32, 32, 4, 2, COLORS.orange);
+                px(34, 34, 4, 2, COLORS.darkOrange);
+                // Breathing animation
+                const breathe = Math.sin(frame * 0.08) * 1;
+                px(20, 33 + breathe, 8, 2, COLORS.lightOrange);
+            }
+
+            function drawWalking(frame) {
+                const step = Math.floor(frame / 4) % 4;
+                const bob = (step % 2 === 0) ? 0 : -1;
+                // Body
+                px(14, 22 + bob, 18, 12, COLORS.orange);
+                px(16, 20 + bob, 14, 4, COLORS.orange);
+                // Stripes
+                px(17, 24 + bob, 3, 2, COLORS.tabbyStripe);
+                px(23, 26 + bob, 3, 2, COLORS.tabbyStripe);
+                // Head
+                px(22, 10 + bob, 14, 12, COLORS.orange);
+                px(24, 12 + bob, 10, 8, COLORS.lightOrange);
+                // Ears
+                px(24, 6 + bob, 4, 6, COLORS.orange);
+                px(32, 6 + bob, 4, 6, COLORS.orange);
+                px(25, 7 + bob, 2, 4, COLORS.cream);
+                px(33, 7 + bob, 2, 4, COLORS.cream);
+                // Eyes
+                px(26, 14 + bob, 3, 3, COLORS.eyes);
+                px(31, 14 + bob, 3, 3, COLORS.eyes);
+                px(27, 14 + bob, 1, 1, COLORS.eyeShine);
+                px(32, 14 + bob, 1, 1, COLORS.eyeShine);
+                // Nose
+                px(29, 17 + bob, 2, 2, COLORS.nose);
+                // Legs - animated
+                const legFrames = [
+                    [[14, 34], [20, 34], [26, 34], [32, 34]],
+                    [[15, 34], [19, 36], [27, 34], [31, 36]],
+                    [[14, 34], [20, 34], [26, 34], [32, 34]],
+                    [[13, 36], [21, 34], [25, 36], [33, 34]],
+                ];
+                const legs = legFrames[step];
+                legs.forEach(([lx, ly]) => px(lx, ly + bob, 4, 6, COLORS.orange));
+                legs.forEach(([lx, ly]) => px(lx, ly + bob + 4, 4, 2, COLORS.cream));
+                // Tail
+                const tailUp = Math.sin(frame * 0.2) * 3;
+                px(10, 22 + tailUp + bob, 4, 2, COLORS.orange);
+                px(8, 20 + tailUp + bob, 4, 2, COLORS.orange);
+                px(6, 18 + tailUp + bob, 4, 2, COLORS.darkOrange);
+            }
+
+            function drawPouncing(frame) {
+                const squish = frame < 5 ? 2 : (frame < 10 ? -4 : 0);
+                // Body stretched
+                px(10, 26 + squish, 24, 10, COLORS.orange);
+                // Head forward
+                px(30, 16 + squish, 14, 12, COLORS.orange);
+                px(32, 18 + squish, 10, 8, COLORS.lightOrange);
+                // Big eyes
+                px(34, 20 + squish, 4, 4, COLORS.eyes);
+                px(40, 20 + squish, 4, 4, COLORS.eyes);
+                px(35, 20 + squish, 2, 2, COLORS.eyeShine);
+                px(41, 20 + squish, 2, 2, COLORS.eyeShine);
+                // Ears perked
+                px(32, 12 + squish, 4, 6, COLORS.orange);
+                px(40, 12 + squish, 4, 6, COLORS.orange);
+                // Paws out
+                px(30, 28 + squish, 8, 4, COLORS.cream);
+                // Back legs
+                px(10, 32 + squish, 6, 6, COLORS.orange);
+                px(10, 36 + squish, 6, 2, COLORS.cream);
+                // Tail up
+                px(6, 22, 4, 2, COLORS.orange);
+                px(4, 18, 4, 2, COLORS.darkOrange);
+            }
+
+            function drawZoomies(frame) {
+                // Same as walking but faster bob and stretched
+                const step = Math.floor(frame / 2) % 4;
+                const bob = (step % 2 === 0) ? -2 : 1;
+                // Elongated body
+                px(8, 24 + bob, 24, 10, COLORS.orange);
+                // Stripes blur
+                px(12, 26 + bob, 4, 1, COLORS.tabbyStripe);
+                px(20, 28 + bob, 4, 1, COLORS.tabbyStripe);
+                // Head
+                px(28, 14 + bob, 12, 10, COLORS.orange);
+                px(30, 16 + bob, 8, 6, COLORS.lightOrange);
+                // Wide eyes
+                px(31, 17 + bob, 3, 3, COLORS.eyes);
+                px(36, 17 + bob, 3, 3, COLORS.eyes);
+                px(32, 17 + bob, 1, 1, COLORS.eyeShine);
+                px(37, 17 + bob, 1, 1, COLORS.eyeShine);
+                // Ears back
+                px(28, 12 + bob, 3, 4, COLORS.orange);
+                px(37, 12 + bob, 3, 4, COLORS.orange);
+                // Speed legs
+                const legs = step % 2 === 0
+                    ? [[8, 34], [16, 36], [24, 34], [30, 36]]
+                    : [[10, 36], [14, 34], [26, 36], [28, 34]];
+                legs.forEach(([lx, ly]) => px(lx, ly + bob, 4, 4, COLORS.orange));
+                // Speed lines
+                ctx.strokeStyle = 'rgba(255,180,60,0.2)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(4, 26 + i * 4 + bob);
+                    ctx.lineTo(0, 26 + i * 4 + bob);
+                    ctx.stroke();
+                }
+                // Tail streaming behind
+                px(4, 26 + bob, 4, 2, COLORS.orange);
+                px(0, 28 + bob, 4, 2, COLORS.darkOrange);
+            }
+
+            function drawCurious(frame) {
+                // Head tilt sitting
+                drawSitting(frame);
+                // Override head with tilt
+                const tilt = Math.sin(frame * 0.1) * 2;
+                // Add ? above head
+                if (frame % 30 < 20) {
+                    ctx.fillStyle = 'rgba(255, 180, 60, 0.6)';
+                    ctx.font = '10px monospace';
+                    ctx.fillText('?', 22, 8 + tilt);
+                }
+            }
+
+            // --- Behavior Engine ---
+            const BEHAVIORS = {
+                sleeping:  { minDuration: 300, maxDuration: 600 },
+                sitting:   { minDuration: 100, maxDuration: 250 },
+                walking:   { minDuration: 80,  maxDuration: 200 },
+                curious:   { minDuration: 40,  maxDuration: 80 },
+                pouncing:  { minDuration: 15,  maxDuration: 25 },
+                zoomies:   { minDuration: 30,  maxDuration: 60 },
+            };
+
+            function nextState() {
+                const timeSinceMessage = Date.now() - cat.lastMessageTime;
+                const quiet = timeSinceMessage > 60000; // 1 min no messages
+                const veryQuiet = timeSinceMessage > 180000; // 3 min
+
+                let weights;
+                if (veryQuiet) {
+                    weights = { sleeping: 70, sitting: 20, walking: 10, curious: 0, pouncing: 0, zoomies: 0 };
+                } else if (quiet) {
+                    weights = { sleeping: 40, sitting: 30, walking: 20, curious: 10, pouncing: 0, zoomies: 0 };
+                } else {
+                    weights = { sleeping: 5, sitting: 25, walking: 30, curious: 20, pouncing: 10, zoomies: 10 };
+                }
+
+                const total = Object.values(weights).reduce((a, b) => a + b, 0);
+                let roll = Math.random() * total;
+                for (const [state, weight] of Object.entries(weights)) {
+                    roll -= weight;
+                    if (roll <= 0) {
+                        const b = BEHAVIORS[state];
+                        cat.state = state;
+                        cat.stateTimer = b.minDuration + Math.floor(Math.random() * (b.maxDuration - b.minDuration));
+                        if (state === 'walking' || state === 'zoomies') {
+                            cat.direction = Math.random() > 0.5 ? 1 : -1;
+                        }
+                        return;
+                    }
+                }
+            }
+
+            function showBubble(text, duration) {
+                const bubble = document.getElementById('tang-bubble');
+                bubble.textContent = text;
+                bubble.classList.add('show');
+                setTimeout(() => bubble.classList.remove('show'), duration || 2500);
+            }
+
+            function spawnZzz() {
+                const zzz = document.createElement('div');
+                zzz.className = 'tang-zzz';
+                zzz.textContent = 'z';
+                zzz.style.left = (20 + Math.random() * 10) + 'px';
+                zzz.style.bottom = '44px';
+                document.getElementById('tang').appendChild(zzz);
+                setTimeout(() => zzz.remove(), 2000);
+            }
+
+            function spawnPurr() {
+                const purr = document.createElement('div');
+                purr.className = 'tang-purr';
+                purr.textContent = '♡';
+                document.getElementById('tang').appendChild(purr);
+                setTimeout(() => purr.remove(), 1500);
+            }
+
+            // --- Chat Reactions ---
+            const originalAddMessage = window.addMessage || (() => {});
+            const _origAddMsg = addMessage;
+            addMessage = function(agent, content, time) {
+                _origAddMsg(agent, content, time);
+
+                // Tang reacts to messages
+                cat.lastMessageTime = Date.now();
+
+                // Check if newest message is near Tang
+                const chatArea = document.getElementById('chat-area');
+                const lastMsg = chatArea ? chatArea.lastElementChild : null;
+                let msgNearCat = false;
+                if (lastMsg) {
+                    const msgRect = lastMsg.getBoundingClientRect();
+                    const catY = window.innerHeight - 56;
+                    const catX = cat.x;
+                    const verticallyClose = (catY - msgRect.bottom) < 80;
+                    const horizontallyClose = Math.abs(catX - msgRect.left) < 200;
+                    msgNearCat = verticallyClose && horizontallyClose;
+                }
+
+                // 70% chance flee, 30% chance stalk
+                if (msgNearCat && cat.state !== 'zoomies') {
+                    if (Math.random() < 0.7) {
+                        // FLEE — run away from the message
+                        const msgCenter = lastMsg ? lastMsg.getBoundingClientRect().left + lastMsg.getBoundingClientRect().width / 2 : 0;
+                        cat.direction = (cat.x < msgCenter) ? -1 : 1;
+                        cat.state = 'zoomies';
+                        cat.stateTimer = 25;
+                        const fleeQuips = ['!', 'EEK', '*SCATTER*', 'nope nope nope', '*startled hiss*'];
+                        showBubble(fleeQuips[Math.floor(Math.random() * fleeQuips.length)], 1500);
+                    } else {
+                        // STALK — crouch and watch the message
+                        cat.state = 'pouncing';
+                        cat.stateTimer = 30;
+                        const stalkQuips = ['*wiggles butt*', '*eyes locked*', '*tail twitching*', '...prey...'];
+                        showBubble(stalkQuips[Math.floor(Math.random() * stalkQuips.length)], 2000);
+                    }
+                    return; // Skip other reactions when proximity triggered
+                }
+
+                if (cat.state === 'sleeping') {
+                    // Wake up!
+                    cat.state = 'curious';
+                    cat.stateTimer = 60;
+                    showBubble('mrrrp?', 2000);
+                }
+
+                // React to exclamation marks
+                if (content && content.includes('!') && content.split('!').length > 2) {
+                    cat.state = 'zoomies';
+                    cat.stateTimer = 40;
+                    showBubble('!!!!!', 1500);
+                }
+
+                // React to cat mentions
+                if (content && (content.toLowerCase().includes('tang') || content.toLowerCase().includes('cat') || content.toLowerCase().includes('kitty'))) {
+                    cat.state = 'pouncing';
+                    cat.stateTimer = 20;
+                    showBubble('mrow!', 2000);
+                }
+
+                // React to Gooby being happy
+                if (content && (content.includes('😊') || content.includes('grin') || content.includes('haha') || content.includes('lol'))) {
+                    spawnPurr();
+                }
+            };
+
+            // --- Click to pet ---
+            document.getElementById('tang').addEventListener('click', () => {
+                cat.state = 'sitting';
+                cat.stateTimer = 80;
+                cat.purring = true;
+                showBubble('purrrrr ♡', 3000);
+                spawnPurr();
+                setTimeout(() => { cat.purring = false; }, 3000);
+            });
+
+            // --- Main Loop ---
+            const WALK_SPEED = 1;
+            const ZOOM_SPEED = 3;
+            const maxX = window.innerWidth - 60;
+
+            function update() {
+                cat.frame++;
+                cat.stateTimer--;
+
+                // Movement
+                if (cat.state === 'walking') {
+                    cat.x += WALK_SPEED * cat.direction;
+                } else if (cat.state === 'zoomies') {
+                    cat.x += ZOOM_SPEED * cat.direction;
+                }
+
+                // Boundary bounce
+                if (cat.x < 10) { cat.x = 10; cat.direction = 1; }
+                if (cat.x > maxX) { cat.x = maxX; cat.direction = -1; }
+
+                // Sleeping zzz
+                if (cat.state === 'sleeping' && cat.frame % 40 === 0) {
+                    spawnZzz();
+                }
+
+                // State transition
+                if (cat.stateTimer <= 0) {
+                    nextState();
+                }
+
+                // Random idle behaviors
+                if (cat.state === 'sitting' && Math.random() < 0.003) {
+                    const quips = [
+                        '*knocks icon off taskbar*',
+                        '*licks paw*',
+                        '*stares at cursor*',
+                        '*ear twitch*',
+                        '*tail flick*',
+                        'mew',
+                        '*blinks slowly*',
+                    ];
+                    showBubble(quips[Math.floor(Math.random() * quips.length)], 2000);
+                }
+
+                // Render
+                catContainer.style.left = cat.x + 'px';
+                drawCat(cat.state, cat.frame, cat.direction);
+
+                requestAnimationFrame(update);
+            }
+
+            // --- Start ---
+            cat.x = Math.random() * (maxX - 100) + 50;
+            nextState();
+            update();
+
+            // Startup message
+            setTimeout(() => showBubble('*yawns*', 3000), 2000);
+
+            console.log('[TANG.EXE] Orange tabby loaded. He is helping. (He is not helping.)');
+        })();
+    </script>
+</body>
+</html>
